@@ -1,0 +1,3 @@
+/home/golimghost/Desktop/CProj/Practice_3/cmake-build-debug/CMakeFiles/pr3.dir
+/home/golimghost/Desktop/CProj/Practice_3/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/golimghost/Desktop/CProj/Practice_3/cmake-build-debug/CMakeFiles/rebuild_cache.dir
