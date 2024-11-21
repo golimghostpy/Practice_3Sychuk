@@ -10,8 +10,6 @@
 #include <atomic>
 #include <format>
 
-int PORT;
-string ADDR;
 int tuplesLim;
 atomic<int> cntThreads(1);
 
@@ -29,7 +27,7 @@ string low_id(const string&, int);
 string delete_from(const string&, StringList);
 bool check_filter_select(const string&, const string&, int);
 IntList cnt_rows(StringMatrix&);
-StringMatrix select_from(const string&, StringList);
+string select_from(const string&, StringList);
 SQLRequest get_com (const string&);
 string complete_request(const string&, string);
 void serve_client(int, const string&, const char*);
@@ -118,7 +116,7 @@ string create_db(){ // создание базы данных, если ее н�
         keys << "1";
         keys.close();
     }
-
+/*
     // добавление лотов
     ifstream lotsFile("config.json");
     nlohmann::json lots;
@@ -145,9 +143,7 @@ string create_db(){ // создание базы данных, если ее н�
     }
     temp.clear();
 
-    PORT = lots["database_port"];
-    ADDR = lots["database_ip"];
-
+*/
     return name;
 }
 
@@ -228,6 +224,8 @@ string insert_into(const string& schemaName, StringList command){ // встав�
     for (int i = 4; i < command.listSize; ++i){
         data.push_back(remove_extra(command.find(i)->data)); // чтение вставляемых данных
     }
+
+    cout << data.print(" ") << endl;
 
     if (split(header, ";").listSize != data.listSize){
         make_inactive(schemaName + "/", tables);
@@ -508,7 +506,7 @@ IntList cnt_rows(StringMatrix& matrix){ // подсчет количества �
     return eachCol;
 }
 
-StringMatrix select_from(const string& schemaName, StringList command){ // функция получения выборки
+string select_from(const string& schemaName, StringList command){ // функция получения выборки
     string genPath = schemaName + '/';
 
     int whereIndex = command.index_word("WHERE");
@@ -523,7 +521,7 @@ StringMatrix select_from(const string& schemaName, StringList command){ // фу�
     check_active(genPath, tables);
     make_active(genPath, tables);
 
-     // получаем колонки
+    // получаем колонки
     StringList columns = take_section(command, command.index_word("SELECT") + 1, command.index_word("FROM"));
     for (auto i = columns.first; i != nullptr; i = i->next){
         i->data = remove_extra(i->data);
@@ -627,9 +625,10 @@ StringMatrix select_from(const string& schemaName, StringList command){ // фу�
         for (auto i = eachCol.first; i != nullptr; i = i->next)
         {
             if (i->data == 0){
-                StringMatrix emptyReturn;
                 toOut.clear();
-                return emptyReturn;
+                make_inactive(genPath, tables);
+                tables.clear();
+                return columns.join(' ');
             }
         }
 
@@ -638,12 +637,14 @@ StringMatrix select_from(const string& schemaName, StringList command){ // фу�
         columns.clear();
         strInTable.clear();
         eachCol.clear();
-        return toOut;
+        string result = toOut.print();
+        toOut.clear();
+        return result;
     }
      // получение фильтра
     string filter = take_section(command, command.index_word("WHERE") + 1, command.listSize).join(' ');
 
-     // аналогичный проход по файлам с проверкой условий
+    // аналогичный проход по файлам с проверкой условий
     for (auto i = tables.first; i != nullptr; i = i->next){
         string path = genPath + i->data + "/";
         for (auto j = columns.first; j != nullptr; j = j->next){
@@ -686,9 +687,10 @@ StringMatrix select_from(const string& schemaName, StringList command){ // фу�
     IntList cntInEach = cnt_rows(toOut);
     for (auto i = cntInEach.first; i != nullptr; i = i->next){
         if (i->data == 0){
-            StringMatrix emptyReturn;
             toOut.clear();
-            return emptyReturn;
+            make_inactive(genPath, tables);
+            tables.clear();
+            return columns.join(' ');
         }
     }
 
@@ -731,7 +733,8 @@ StringMatrix select_from(const string& schemaName, StringList command){ // фу�
     make_inactive(genPath, tables);
     tables.clear();
     columns.clear();
-    return finalOut;
+    string result = finalOut.print();
+    return result;
 }
 
 SQLRequest get_com (const string& command){ // выбор токена
@@ -745,7 +748,7 @@ string complete_request(const string& schemaName, string request){
     StringList splited = split(request, " "); // делим запрос
     SQLRequest choice = get_com(splited.find(0)->data); // полчаем токен
     switch (choice){ // в зависимости от токена вызываем нужную функцию
-    case SQLRequest::SELECT: return select_from(schemaName, splited).print();
+    case SQLRequest::SELECT: return select_from(schemaName, splited);
     case SQLRequest::INSERT: return insert_into(schemaName, splited);
     case SQLRequest::DELETE: return delete_from(schemaName, splited);
     case SQLRequest::UNKNOWN: return "Wrong command!";
@@ -766,18 +769,17 @@ void serve_client(int clientSocket, const string& schemaName, const char* client
             break;
         }
 
+        string request = client.get();
         {
             lock_guard<mutex> lock(mainMuter); // ограничиваем доступ, чтобы не было ошибок в выводе
             client.get()[bytesRead] = '\0';
-            cout << "Request taken: " << client.get() << endl;
+            cout << "Request taken: " << request << endl;
         }
 
-        string answer = "Server message:\n";
-        string request = client.get();
-        string partRes = complete_request(schemaName, request); // отправляем запрос на выполнение
-        answer += partRes; // формируем ответ
+        string answer = complete_request(schemaName, request); // отправляем запрос на выполнение
 
         send(clientSocket, answer.c_str(), answer.size(), 0); // отправляем ответ
+        cout << "Answer |" << answer << "| was sent" << endl;
     }
 
     close(clientSocket); // закрываем сокет для клиента
@@ -801,9 +803,10 @@ void start_server(const string& schemaName) {
     }
 
     struct sockaddr_in address;
+    string serverIP = "127.0.0.1";
     address.sin_family = AF_INET; // IPv4
-    address.sin_addr.s_addr = inet_addr(ADDR.c_str()); // установка IP
-    address.sin_port = htons(PORT); // установка порта
+    address.sin_addr.s_addr = inet_addr(serverIP.c_str()); // установка IP
+    address.sin_port = htons(7432); // установка порта
 
     // привязкаа сокета к адресу
     if (bind(serverSocket, (struct sockaddr *)&address, sizeof(address)) < 0) {
@@ -833,9 +836,6 @@ void start_server(const string& schemaName) {
             cout << "Client[" << clientIP << "] was connected" << endl; // выводим клиента, который подключился
             thread(serve_client, clientSocket, schemaName, clientIP).detach(); // выводим клиента в другой поток
             // и отключаем отслеживание
-
-            string answer = "Successfully connected to the server";
-            send(clientSocket, answer.c_str(), answer.size(), 0); // отправляем клиенту успешное подключение
         }
         else{
             string answer = "A lot of clients now, try it later";

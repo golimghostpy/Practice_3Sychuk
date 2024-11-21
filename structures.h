@@ -97,6 +97,4 @@ struct Array {
     char* get();
 };
 
-string operator*(const string&, int);
-
 #endif // STRUCTURES_H_INCLUDED

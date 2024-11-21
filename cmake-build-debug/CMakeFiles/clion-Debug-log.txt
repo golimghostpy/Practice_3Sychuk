@@ -1,23 +1,4 @@
 /home/golimghost/Documents/clion-2024.2.1/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/golimghost/Documents/clion-2024.2.1/bin/ninja/linux/x64/ninja -G Ninja -DPython_EXECUTABLE=/usr/bin/python3.11 -DPython3_EXECUTABLE=/usr/bin/python3.11 -S /home/golimghost/Desktop/CProj/Practice_3 -B /home/golimghost/Desktop/CProj/Practice_3/cmake-build-debug
--- The C compiler identification is GNU 13.3.0
--- The CXX compiler identification is GNU 13.3.0
--- Detecting C compiler ABI info
--- Detecting C compiler ABI info - done
--- Check for working C compiler: /usr/bin/cc - skipped
--- Detecting C compile features
--- Detecting C compile features - done
--- Detecting CXX compiler ABI info
--- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: /usr/bin/c++ - skipped
--- Detecting CXX compile features
--- Detecting CXX compile features - done
--- Configuring done (6.6s)
--- Generating done (0.0s)
-CMake Warning:
-  Manually-specified variables were not used by the project:
-
-    Python3_EXECUTABLE
-    Python_EXECUTABLE
-
-
+-- Configuring done (0.2s)
+-- Generating done (0.1s)
 -- Build files have been written to: /home/golimghost/Desktop/CProj/Practice_3/cmake-build-debug

@@ -184,10 +184,10 @@ string StringMatrix::print(){ // вывод
         int currRow = 0;
         for (auto row = col; row != nullptr; row = row->nextRow){
             if (col == firstCol){
-                out.push_back(row->data + (string(" ") * static_cast<int>(20 - (row->data).size())));
+                out.push_back(row->data + ";");
             }
             else{
-                out.find(currRow)->data += row->data + (string(" ") * static_cast<int>(20 - (row->data).size()));
+                out.find(currRow)->data += row->data + ";";
             }
             ++currRow;
         }
@@ -222,12 +222,4 @@ MatrixNode* StringMatrix::get_at(int col, int row)
 
 char* Array::get(){
     return data;
-}
-
-string operator*(const string& str, int n) { // переопределение операции умножения строки на число
-    string result;
-    for (int i = 0; i < n; ++i) {
-        result += str;
-    }
-    return result;
 }
