@@ -179,10 +179,14 @@ StringList split(const string& str, const string& delimiter) { // разбиен
 string remove_extra(string& removeFrom){ // удаление лишних символов
     string newStr;
     for (auto i: removeFrom){
-        if (i == '(' || i == '\'' || i == ')' || i == ',' || i == ' '){
+        if (i == '(' || i == '\'' || i == ',' || i == ' '){
             continue;
         }
-        else {newStr += i;}
+        if (i == ')')
+        {
+            break;
+        }
+        newStr += i;
     }
     return newStr;
 }

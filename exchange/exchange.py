@@ -41,14 +41,14 @@ def create_order():
     if not userKey:
         return jsonify({"error": "You must enter your key"}), 400
 
-    keyCheck = send_to_server(f"SELECT user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1:-2]
+    keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1:-2]
     if len(keyCheck) == 0:
         return jsonify({"error": "No such a key"}), 400
 
     if 'pair_id' not in data or 'quantity' not in data or 'price' not in data or 'type' not in data:
         return jsonify({"error": "Must enter fields: pair_id, quantity, price and type"}), 400
 
-    userId = send_to_server(f"SELECT user.user_id FROM user WHERE user.key = '{userKey}'").split("\n")[1]
+    userId = keyCheck[0][:-1]
 
     # Отправляем сообщение на сервер
     response = send_to_server(f"INSERT INTO order VALUES ('{userId}', '{data['pair_id']}', '{data['quantity']}', '{data['price']}', '{data['type']}', '-')")
@@ -69,6 +69,31 @@ def get_order():
                          "quantity": float(parts[3]), "type": parts[4], "price": float(parts[5]), "closed": parts[6]})
 
     return jsonify(response)
+
+@app.route('/order', methods=['DELETE'])
+def delete_order():
+    data = request.get_json()
+    userKey = request.headers.get('X-USER-KEY')
+
+    if not userKey:
+        return jsonify({"error": "You must enter your key"}), 400
+
+    keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1:-2]
+    if len(keyCheck) == 0:
+        return jsonify({"error": "No such a key"}), 400
+
+    if 'order_id' not in data:
+        return jsonify({'error': 'You must enter order_id to delete'}), 400
+
+    try:
+        orderOwner = send_to_server(f"SELECT order.user_id FROM order WHERE order.order_id = '{data['order_id']}'").split("\n")[1]
+    except Exception:
+        return jsonify({'error': 'No order with that id'}), 400
+
+    if keyCheck[0] != orderOwner:
+        return jsonify({'error': 'It is not your order'}), 400
+
+    send_to_server(f"DELETE FROM order WHERE order.order_id = '{data['order_id']}'")
 
 def get_config():
     with open('config.json', 'r') as configFile:
