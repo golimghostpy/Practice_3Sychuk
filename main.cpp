@@ -23,7 +23,6 @@ string remove_extra(string&);
 void write_in_csv(const string&, StringList);
 string insert_into(const string&, StringList);
 bool check_filter_delete(StringList&, StringList&, const string&);
-string low_id(const string&, int);
 string delete_from(const string&, StringList);
 bool check_filter_select(const string&, const string&, int);
 IntList cnt_rows(StringMatrix&);
@@ -307,16 +306,6 @@ bool check_filter_delete(StringList& header, StringList& text, const string& fil
     return false; // Условие не выполнено, строка не должна быть удалена
 }
 
-string low_id(const string& command, int lowOn) {
-    StringList splited = split(command, ";");
-    int id = stoi(splited.find(0)->data);
-    id -= lowOn; // Уменьшаем id на количество удаленных строк
-    splited.find(0)->data = to_string(id);
-    string newCommand = splited.join(';');
-    splited.clear();
-    return newCommand;
-}
-
 string delete_from(const string& schemaName, StringList command) {
     if (command.listSize < 3) {
         return "Wrong count of arguments\n";
@@ -333,7 +322,6 @@ string delete_from(const string& schemaName, StringList command) {
     // Проверка наличия фильтра
     StringList filter = take_section(command, 4, command.listSize);
     string toSplit = filter.join(' ');
-    int diffId = 0;
 
     // Обработка файлов
     do {
@@ -350,16 +338,10 @@ string delete_from(const string& schemaName, StringList command) {
 
         while (readFile >> line) {
             StringList data = split(line, ";");
-            cout << "Processing line: " << line << " with filter: " << toSplit << endl;
 
             // Проверяем, нужно ли удалять строку
-            if (check_filter_delete(header, data, toSplit)) {
-                ++diffId; // Увеличиваем счетчик удаленных строк
-                cout << "Row matched filter and will be deleted." << endl;
-            } else {
-                string temp = low_id(line, diffId);
-                save.push_back(temp); // Сохраняем строку, если она не соответствует фильтру
-                cout << "Row did not match filter and will be kept: " << temp << endl;
+            if (!check_filter_delete(header, data, toSplit)) {
+                save.push_back(line); // Сохраняем строку, если она не соответствует фильтру
             }
         }
         readFile.close();
@@ -375,16 +357,6 @@ string delete_from(const string& schemaName, StringList command) {
         header.clear();
         save.clear();
     } while (true);
-
-    // Обновление максимального id
-    ifstream pkRead(schemaName + '/' + command.find(2)->data + '/' + command.find(2)->data + "_pk_sequence.txt");
-    string idStr;
-    getline(pkRead, idStr);
-    pkRead.close();
-    int newID = stoi(idStr) - diffId; // Уменьшаем максимальный id на количество удаленных строк
-    ofstream pkWrite(schemaName + '/' + command.find(2)->data + '/' + command.find(2)->data + "_pk_sequence.txt");
-    pkWrite << newID;
-    pkWrite.close();
 
     make_inactive(schemaName + "/", tables);
     tables.clear();

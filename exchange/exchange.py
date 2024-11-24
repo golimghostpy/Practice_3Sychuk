@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 import uuid
 import socket
 import json
-from ctypes import memset
+
+lots = []
 
 app = Flask(__name__)
 clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -32,6 +33,11 @@ def create_user():
             break
 
     send_to_server(f"INSERT INTO user VALUES ('{username}', '{key}')")
+
+    userId = send_to_server(f"SELECT user.user_id FROM user WHERE user.username = '{username}'").split('\n')[1]
+    for i in range(1, len(lots) + 1):
+        send_to_server(f"INSERT INTO user_lot VALUES ('{userId[:-1]}', '{i}', '1000')")
+
     return jsonify({"key": key})
 
 @app.route('/order', methods=['POST'])
@@ -142,11 +148,25 @@ def get_config():
         config = json.load(configFile)
         return [config['lots'], config['database_ip'], config['database_port']]
 
+def add_lots(lots):
+    with open('../bin/trader/lot/lot_pk_sequence.txt', 'r') as idFile:
+        if (idFile.readline() != '1'):
+            return
+
+    for i in lots:
+        send_to_server(f"INSERT INTO lot VALUES ('{i}')")
+
+    for i in range(len(lots) - 1):
+        for j in range(i + 1, len(lots)):
+            send_to_server(f"INSERT INTO pair VALUES ('{i + 1}', '{j + 1}')")
+
 if __name__ == '__main__':
     lots, dbIP, dbPort = get_config()
 
     serverAddr = (str(dbIP), int(dbPort))
     clientSock.connect(serverAddr)
+
+    add_lots(lots)
 
     app.run(debug=True)
 
