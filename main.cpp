@@ -179,12 +179,8 @@ StringList split(const string& str, const string& delimiter) { // разбиен
 string remove_extra(string& removeFrom){ // удаление лишних символов
     string newStr;
     for (auto i: removeFrom){
-        if (i == '(' || i == '\'' || i == ',' || i == ' '){
+        if (i == '(' || i == '\'' || i == ')' || i == ',' || i == ' '){
             continue;
-        }
-        if (i == ')')
-        {
-            break;
         }
         newStr += i;
     }
@@ -278,50 +274,51 @@ string insert_into(const string& schemaName, StringList command){ // встав�
     return "Inserted successfully\n";
 }
 
-bool check_filter_delete(StringList& header, StringList& text, const string& filter){ // проверка фильтра для удаления
+bool check_filter_delete(StringList& header, StringList& text, const string& filter) {
     StringList orSplited = split(filter, " OR ");
-    for (Node<string>* i = orSplited.first; i != nullptr; i = i->next){ // слабый приоритет or
+    for (Node<string>* i = orSplited.first; i != nullptr; i = i->next) {
         StringList andSplited = split(i->data, " AND ");
         bool isAnd = true;
-        for (Node<string>* j = andSplited.first; j != nullptr; j = j->next){ // сильный приоритет and
+        for (Node<string>* j = andSplited.first; j != nullptr; j = j->next) {
             StringList expression = split(j->data, " ");
             string colName1 = split(expression.find(0)->data, ".").find(1)->data; // первая колонка
             int colIndex1 = header.index_word(colName1);
-            if (expression.find(2)->data[0] == '\''){ // если сравнение со строкой
-                if (text.find(colIndex1)->data != remove_extra(expression.find(2)->data)){
+            if (expression.find(2)->data[0] == '\'') { // если сравнение со строкой
+                if (text.find(colIndex1)->data != remove_extra(expression.find(2)->data)) {
                     isAnd = false;
                     break;
                 }
-            }
-            else { // если сравнение двух элементов таблицы
+            } else { // если сравнение двух элементов таблицы
                 string colName2 = split(expression.find(2)->data, ".").find(1)->data;
                 int colIndex2 = header.index_word(colName2);
-                if (text.find(colIndex1)->data != text.find(colIndex2)->data){
+                if (text.find(colIndex1)->data != text.find(colIndex2)->data) {
                     isAnd = false;
                     break;
                 }
             }
         }
-        if (isAnd){orSplited.clear(); return true;}
+        if (isAnd) {
+            orSplited.clear();
+            return true; // Условие выполнено, строка должна быть удалена
+        }
         andSplited.clear();
     }
     orSplited.clear();
-    return false;
+    return false; // Условие не выполнено, строка не должна быть удалена
 }
 
-string low_id(const string& command, int lowOn){ // уменьшить id после удаления элементов
+string low_id(const string& command, int lowOn) {
     StringList splited = split(command, ";");
     int id = stoi(splited.find(0)->data);
-    id -= lowOn;
+    id -= lowOn; // Уменьшаем id на количество удаленных строк
     splited.find(0)->data = to_string(id);
     string newCommand = splited.join(';');
     splited.clear();
     return newCommand;
 }
 
-string delete_from(const string& schemaName, StringList command){ // основная функция удаление
-    if (command.listSize < 3)
-    {
+string delete_from(const string& schemaName, StringList command) {
+    if (command.listSize < 3) {
         return "Wrong count of arguments\n";
     }
 
@@ -332,74 +329,59 @@ string delete_from(const string& schemaName, StringList command){ // основ�
 
     string path = schemaName + '/' + command.find(2)->data + '/';
     int currentFile = 1;
-    if (command.word_find("WHERE") == command.last){ // если есть фильтр, то пересоздаем таблицу
-        while (remove((path + to_string(currentFile) + ".csv").c_str())){
-            ++currentFile;
-        }
 
-        ifstream inFile("schema.json");
-        nlohmann::json schema;
-        inFile >> schema;
-        StringList columns;
-        columns.push_back(command.find(2)->data + "_pk");
-        for (auto i: schema["structure"][command.find(2)->data]){
-            columns.push_back(i);
-        }
-
-        ofstream newFirst(path + "1.csv");
-        newFirst.close();
-
-        write_in_csv(path + "1.csv", columns);
-
-        ofstream updateId(path + command.find(2)->data + "_pk_seqquence.txt");
-        updateId << "1";
-        updateId.close();
-        tables.clear();
-        columns.clear();
-        return "Deleted successfully\n";
-    }
-
-    StringList filter = take_section(command, 4, command.listSize); // получение фильтра
+    // Проверка наличия фильтра
+    StringList filter = take_section(command, 4, command.listSize);
     string toSplit = filter.join(' ');
     int diffId = 0;
-    do{ // проверяем каждую строчку на фильтр
+
+    // Обработка файлов
+    do {
         ifstream readFile(path + to_string(currentFile) + ".csv");
-        if (!readFile.is_open()){
-            break;
+        if (!readFile.is_open()) {
+            break; // Если файл не открыт, выходим из цикла
         }
+
         string strHeader;
         readFile >> strHeader;
         StringList header = split(strHeader, ";");
         string line;
-        StringList save;
-        while(readFile >> line){
+        StringList save; // Список для хранения строк, которые не нужно удалять
+
+        while (readFile >> line) {
             StringList data = split(line, ";");
-            if (!check_filter_delete(header, data, toSplit)){
+            cout << "Processing line: " << line << " with filter: " << toSplit << endl;
+
+            // Проверяем, нужно ли удалять строку
+            if (check_filter_delete(header, data, toSplit)) {
+                ++diffId; // Увеличиваем счетчик удаленных строк
+                cout << "Row matched filter and will be deleted." << endl;
+            } else {
                 string temp = low_id(line, diffId);
-                save.push_back(temp); // сохраняем, если подойдет
-            }
-            else {
-                ++diffId; // разница в id возрастает
+                save.push_back(temp); // Сохраняем строку, если она не соответствует фильтру
+                cout << "Row did not match filter and will be kept: " << temp << endl;
             }
         }
         readFile.close();
+
+        // Перезаписываем файл с сохраненными строками
         ofstream writeFile(path + to_string(currentFile) + ".csv");
         writeFile << strHeader << endl;
-        for (Node<string>* i = save.first; i != nullptr; i = i->next){ // перезапись файла
-            writeFile << i->data << endl;
+        for (Node<string>* i = save.first; i != nullptr; i = i->next) {
+            writeFile << i->data << endl; // Записываем строки, которые не были удалены
         }
         writeFile.close();
         ++currentFile;
         header.clear();
         save.clear();
-    }while(true);
+    } while (true);
 
-     // изменение max id
+    // Обновление максимального id
     ifstream pkRead(schemaName + '/' + command.find(2)->data + '/' + command.find(2)->data + "_pk_sequence.txt");
     string idStr;
     getline(pkRead, idStr);
     pkRead.close();
-    int newID = stoi(idStr) - diffId;
+    int newID = stoi(idStr) - diffId; // Уменьшаем максимальный id на количество удаленных строк
     ofstream pkWrite(schemaName + '/' + command.find(2)->data + '/' + command.find(2)->data + "_pk_sequence.txt");
     pkWrite << newID;
     pkWrite.close();
@@ -772,6 +754,7 @@ void serve_client(int clientSocket, const string& schemaName, const char* client
             cout << "Client [" << clientIP << "] was disconnected" << endl;
             break;
         }
+        client.get()[bytesRead] = '\0';
 
         string request = client.get();
         {

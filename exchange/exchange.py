@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import uuid
 import socket
 import json
+from ctypes import memset
 
 app = Flask(__name__)
 clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,14 +42,12 @@ def create_order():
     if not userKey:
         return jsonify({"error": "You must enter your key"}), 400
 
-    keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1:-2]
+    userId, keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1].split(';')[:-1]
     if len(keyCheck) == 0:
         return jsonify({"error": "No such a key"}), 400
 
     if 'pair_id' not in data or 'quantity' not in data or 'price' not in data or 'type' not in data:
         return jsonify({"error": "Must enter fields: pair_id, quantity, price and type"}), 400
-
-    userId = keyCheck[0][:-1]
 
     # Отправляем сообщение на сервер
     response = send_to_server(f"INSERT INTO order VALUES ('{userId}', '{data['pair_id']}', '{data['quantity']}', '{data['price']}', '{data['type']}', '-')")
@@ -78,7 +77,7 @@ def delete_order():
     if not userKey:
         return jsonify({"error": "You must enter your key"}), 400
 
-    keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1:-2]
+    userId, keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1].split(';')[:-1]
     if len(keyCheck) == 0:
         return jsonify({"error": "No such a key"}), 400
 
@@ -90,10 +89,53 @@ def delete_order():
     except Exception:
         return jsonify({'error': 'No order with that id'}), 400
 
-    if keyCheck[0] != orderOwner:
+    if userId != orderOwner[:-1]:
         return jsonify({'error': 'It is not your order'}), 400
 
     send_to_server(f"DELETE FROM order WHERE order.order_id = '{data['order_id']}'")
+    return jsonify({"message": "Order deleted successfully"}), 200
+
+@app.route('/lot', methods=['GET'])
+def get_lot():
+    lots = send_to_server(f"SELECT lot.lot_id, lot.name FROM lot")
+
+    response = []
+    for order in lots.split("\n")[1:-2]:
+        parts = order.split(";")
+        response.append({"lot_id": int(parts[0]), "name": parts[1]})
+
+    return jsonify(response)
+
+@app.route('/pair', methods=['GET'])
+def get_pair():
+    pairs = send_to_server(f"SELECT pair.pair_id, pair.first_lot_id, pair.second_lot_id FROM pair")
+
+    response = []
+    for order in pairs.split("\n")[1:-2]:
+        parts = order.split(";")
+        response.append({"pair_id": int(parts[0]), "sale_lot_id": int(parts[1]), "buy_lot_id": int(parts[2])})
+
+    return jsonify(response)
+
+@app.route('/balance', methods=['GET'])
+def get_balance():
+    data = request.get_json()
+    userKey = request.headers.get('X-USER-KEY')
+
+    if not userKey:
+        return jsonify({"error": "You must enter your key"}), 400
+
+    userId, keyCheck = send_to_server(f"SELECT user.user_id, user.key FROM user WHERE user.key = '{userKey}'").split("\n")[1].split(';')[:-1]
+    if len(keyCheck) == 0:
+        return jsonify({"error": "No such a key"}), 400
+
+    userLots = send_to_server(f"SELECT user_lot.lot_id, user_lot.quantity FROM user_lot WHERE user_lot.user_id = '{userId}'").split('\n')[1:-2]
+    response = []
+    for lot in userLots:
+        parts = lot.split(';')
+        response.append({'lot_id': parts[0], 'quantity': parts[1]})
+
+    return jsonify(response)
 
 def get_config():
     with open('config.json', 'r') as configFile:
